@@ -1,0 +1,430 @@
+{
+  "name": "Telegram Voice Message AI Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check if message has voice\nreturn items.map(item => {\n  item.json.hasVoice = !!item.json.message.voice;\n  return item;\n});"
+      },
+      "name": "Code",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value1": "={{$json[\"hasVoice\"]}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "download",
+        "filePath": "/tmp/voice.ogg"
+      },
+      "name": "Telegram Download",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "/tmp/voice.ogg"
+      },
+      "name": "OpenAI Transcription",
+      "type": "n8n-nodes-base.openaiWhisper",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "message": "={{$json.text}}"
+        }
+      },
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "={{$json.message}}"
+          }
+        ]
+      },
+      "name": "OpenAI Chat",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.message.chat.id}}",
+        "text": "={{$json.choices[0].message.content}}"
+      },
+      "name": "Telegram Send",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "key": "={{$json.message.chat.id}}",
+        "value": "={{$json.choices[0].message.content}}"
+      },
+      "name": "Simple Memory",
+      "type": "n8n-nodes-base.memory",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "to": "example@gmail.com",
+        "subject": "AI Reply Summary",
+        "text": "={{$json.choices[0].message.content}}"
+      },
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#general",
+        "text": "AI replied to a Telegram voice message:\n{{$json.choices[0].message.content}}"
+      },
+      "name": "Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Translate the following message into French, Spanish, and German:\n{{$json.choices[0].message.content}}"
+          }
+        ]
+      },
+      "name": "Translate",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "\nconst content = $json.message.toLowerCase();\nlet language = \"french\";\nif (content.includes(\"translation\")) {\n  if (content.includes(\"spanish\")) language = \"spanish\";\n  else if (content.includes(\"german\")) language = \"german\";\n  else language = \"english\";\n}\nreturn [{ json: { ...$json, targetLanguage: language } }];\n"
+      },
+      "name": "Detect Language Intent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value1": "={{$json.targetLanguage}}",
+              "operation": "equal",
+              "value2": "english"
+            },
+            {
+              "value1": "={{$json.targetLanguage}}",
+              "operation": "equal",
+              "value2": "spanish"
+            },
+            {
+              "value1": "={{$json.targetLanguage}}",
+              "operation": "equal",
+              "value2": "german"
+            },
+            {
+              "value1": "={{$json.targetLanguage}}",
+              "operation": "equal",
+              "value2": "french"
+            }
+          ]
+        }
+      },
+      "name": "Language Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Translate the following French message into English:\n{{$json.message}}"
+          }
+        ]
+      },
+      "name": "Translate to English",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1650,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Translate the following French message into Spanish:\n{{$json.message}}"
+          }
+        ]
+      },
+      "name": "Translate to Spanish",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Translate the following French message into German:\n{{$json.message}}"
+          }
+        ]
+      },
+      "name": "Translate to German",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1650,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Generate a reply in French for the following:\n{{$json.message}}"
+          }
+        ]
+      },
+      "name": "Reply in French",
+      "type": "n8n-nodes-base.openaiChat",
+      "typeVersion": 1,
+      "position": [
+        1650,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          "Code"
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          "Switch"
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          "Telegram Download"
+        ]
+      ]
+    },
+    "Telegram Download": {
+      "main": [
+        [
+          "OpenAI Transcription"
+        ]
+      ]
+    },
+    "OpenAI Transcription": {
+      "main": [
+        [
+          "Edit Fields"
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Detect Language Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat": {
+      "main": [
+        [
+          "Telegram Send"
+        ],
+        [
+          {
+            "node": "Simple Memory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Translate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Language Intent": {
+      "main": [
+        [
+          {
+            "node": "Language Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Language Switch": {
+      "main": [
+        [
+          {
+            "node": "Translate to English",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Translate to Spanish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Translate to German",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply in French",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "tags": [],
+  "id": "28d51a4f-544f-4b38-bf9e-c609da422f1b",
+  "createdAt": "2025-05-30T13:56:29.271934",
+  "updatedAt": "2025-05-30T13:56:29.271944"
+}
