@@ -1,0 +1,70 @@
+{
+  "name": "Document Intelligence Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upload-document"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "\nconst fs = require('fs');\nconst { parseDocument } = require('your-pdf-epub-parser');  // Replace with actual parser\nconst { summarizeText, extractKeywords, textToMp3 } = require('your-nlp-tools');  // Replace with actual NLP tools\n\n// Assume file is available in binaryData\nconst document = items[0].binary.data;\n\nconst parsedText = parseDocument(document);\nconst summary = summarizeText(parsedText, 10); // Max 10 sentences\nconst keywords = extractKeywords(parsedText, 3); // Top 3 keywords\nconst audioUrl = textToMp3(summary, 'summary.mp3');\n\n// Construct metadata\nreturn [{\n    json: {\n        title: \"Extracted Title\",  // You could auto-extract this\n        summary: summary,\n        keywords: keywords,\n        audio_url: audioUrl,\n        created_at: new Date().toISOString(),\n        file_size: document.length + \" bytes\",\n        document_format: \"pdf\",  // or epub\n        original_filename: \"document.pdf\",\n        email_sent_to: \"owner@gmail.com\"\n    }\n}];\n"
+      },
+      "name": "Process Document",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "youremail@gmail.com",
+        "toEmail": "owner@gmail.com",
+        "subject": "Your Document Summary and Audio",
+        "text": "Attached is your processed document summary and audio.",
+        "attachments": []
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Document": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
