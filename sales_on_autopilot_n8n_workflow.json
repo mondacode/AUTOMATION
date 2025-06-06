@@ -1,0 +1,114 @@
+{
+  "name": "Sales on Autopilot",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": 1,
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Step 1: Clone a viral TikTok video\nreturn [{ json: { step: 'Clone a viral TikTok video', actions: ['Detect trending TikTok content', 'Extract TikTok video URL', 'Download video', 'Upload to transcription service', 'Generate subtitles and transcription', 'Extract key themes', 'Store transcript in Google Sheets'] } }];"
+      },
+      "id": 2,
+      "name": "Step 1 - TikTok Clone",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Step 2: Suggest new content idea\nreturn [{ json: { step: 'Suggest New Content Idea', actions: ['Read transcript from Google Sheets', 'Analyze script and caption structure', 'Segment content into sections', 'Use AI to generate new variations', 'Save revised script to Google Drive'] } }];"
+      },
+      "id": 3,
+      "name": "Step 2 - Content Idea",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        650,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Step 3: Create the New Video with Avatar\nreturn [{ json: { step: 'Create the New Video with Avatar', actions: ['Input revised script', 'Select AI avatar style', 'Generate avatar video', 'Add overlays and branding elements', 'Render and compile final video', 'Upload finished video to Google Drive'] } }];"
+      },
+      "id": 4,
+      "name": "Step 3 - Avatar Video",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Step 4: Publish to 9 Platforms\nreturn [{ json: { step: 'Publish to 9 Platforms', actions: ['Retrieve final video file', 'Assign metadata and hashtags', 'Use automation tools to distribute to Instagram, YouTube, LinkedIn, Facebook, TikTok, Pinterest, Twitter (X), Snapchat, Other channels'] } }];"
+      },
+      "id": 5,
+      "name": "Step 4 - Publish",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Step 1 - TikTok Clone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1 - TikTok Clone": {
+      "main": [
+        [
+          {
+            "node": "Step 2 - Content Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2 - Content Idea": {
+      "main": [
+        [
+          {
+            "node": "Step 3 - Avatar Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3 - Avatar Video": {
+      "main": [
+        [
+          {
+            "node": "Step 4 - Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
