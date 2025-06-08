@@ -38,7 +38,7 @@ Kseniase
 Filesystem MCP Server -> https://github.com/modelcontextprotocol/servers/tree/HEAD/src/filesystem
 Read, write, search files, plus create, delete, list and move directories specified via args.
 
-Notion MCP Server -> https://github.com/makenotion/notion-mcp-server
+[Notion MCP Server] -> (https://github.com/makenotion/notion-mcp-server)
 Enable models to interact with your Notion workspace to automate tasks such as searching, reading, creating, and updating pages and databases
 
 Markdownify MCP Server -> https://github.com/zcaceres/markdownify-mcp
