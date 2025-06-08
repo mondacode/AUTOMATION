@@ -1,0 +1,40 @@
+import requests
+import os
+import zipfile
+import io
+
+def download_github_repo(repo_url, output_dir):
+try:
+# Construct the URL to download the repository as a ZIP file
+repo_name = repo_url.split('/')[-1]
+zip_url = f"{repo_url}/archive/refs/heads/main.zip"
+
+print(f"Downloading repository from {zip_url}...")
+response = requests.get(zip_url)
+response.raise_for_status()
+
+# Create output directory if it doesn't exist
+if not os.path.exists(output_dir):
+os.makedirs(output_dir)
+
+# Save the ZIP file to the output directory
+zip_path = os.path.join(output_dir, f"{repo_name}.zip")
+with open(zip_path, 'wb') as zip_file:
+zip_file.write(response.content)
+
+# Extract the ZIP file
+print(f"Extracting repository to {output_dir}...")
+with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+z.extractall(output_dir)
+
+print(f"Repository successfully downloaded and extracted to {output_dir}.")
+
+except Exception as e:
+print(f"An error occurred: {e}")
+
+# Define the GitHub repository URL and output directory
+repo_url = "https://github.com/masteriohub/lead-qualifier-mvp"
+output_dir = "./downloaded_repo"
+
+# Download and extract the repository
+download_github_repo(repo_url, output_dir)
