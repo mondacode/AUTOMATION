@@ -1,0 +1,227 @@
+
+🛠️ Set system prompt and clear history
+qwen2.5-max
+
+Create a python script to format the identation automatically of every Notion.io post
+
+To create a Python script that automatically formats the indentation of every Notion post, we need to consider the following:
+
+Key Challenges:
+Accessing Notion Data: Notion provides an API to interact with its pages and databases. We need to use this API to fetch the content of posts.
+Parsing and Formatting Content: Notion stores content in a structured JSON format. We need to parse this JSON, identify text blocks, and adjust their indentation.
+Updating Notion Pages: After formatting, we need to update the Notion page with the modified content.
+Prerequisites:
+Install the notion-client library: pip install notion-client
+Obtain an integration token from Notion (via Notion Developers).
+Share the relevant Notion pages or databases with your integration.
+Below is the Python script that automates the indentation formatting for Notion posts:
+
+Python Script
+
+import os
+from notion_client import Client
+
+# Initialize the Notion clientompt and clear history
+
+qwen2.5-max
+
+What are the most popular use cases of mcp with n8n ? Explain why and examplify the process
+
+Introduction to MCP with n8n
+
+MCP (Message Passing Communication) is a protocol or framework that allows different systems, services, or devices to communicate by passing messages between them. It is widely used in distributed systems and IoT (Internet of Things) applications. n8n, on the other hand, is an open-source workflow automation tool that allows users to connect different apps and services using a visual interface. It enables users to create workflows by chaining together "nodes" that represent actions, such as sending data to an API, processing it, or triggering events.
+
+When combined, MCP and n8n can be used to automate complex workflows involving message-based communication. Below are some of the most popular use cases for MCP with n8n, along with explanations and examples.
+
+1. IoT Device Integration
+
+Why?
+IoT devices often rely on message-passing protocols like MQTT (a common implementation of MCP) to send and receive data. n8n can act as a bridge between these devices and other services, enabling real-time data processing, storage, or triggering actions based on sensor data.
+
+Example Process:
+
+An IoT device (e.g., a temperature sensor) sends temperature readings via MQTT to an MQTT broker.
+
+n8n listens to the MQTT topic using its MQTT node.
+
+If the temperature exceeds a threshold, n8n triggers an action:
+
+Sends an email alert using the Email node.
+
+Updates a dashboard in a cloud service (e.g., Google Sheets or Airtable).
+
+Activates another IoT device (e.g., turning on an air conditioner via an API call).
+
+Workflow Example:
+
+[MQTT Node] -> [IF Node to check temperature] -> [Email Node to send alert] 
+
+2. Real-Time Notifications
+
+Why?
+Many applications require real-time notifications when specific events occur. MCP protocols like WebSocket or MQTT can deliver these events instantly, while n8n can process and route them to appropriate notification channels (e.g., Slack, SMS, or Push Notifications).
+
+Example Process:
+
+A server publishes a message to an MQTT topic whenever a new order is placed.
+
+n8n subscribes to this topic using the MQTT node.
+
+Upon receiving the message, n8n:
+
+Parses the order details.
+
+Sends a notification to a Slack channel using the Slack node.
+
+Logs the order into a database using the Database node.
+
+Workflow Example:
+
+[MQTT Node] -> [Function Node to parse data] -> [Slack Node to send notification] 
+
+3. Data Aggregation and Transformation
+
+
+Create  a program  using a MCP to trigger actions based on the  creation of a Notion page.  n8n can listen for these events and execute predefined workflows :
+
+n8n listens to the creation of the post and processes the data in the predefined format (text or pdf) based on the post status in the Notion database
+
+Based on the data, n8n  creates a new task in a project management tool (Google sheet) , and set the post status to publication ready
+
+ The new posts are published daily at 12 p.m in the determined Slack channel  and a confirmation email is sent to the user.
+
+ the Notion database is updated, the post status is now published,  and the Google Sheet has the copy of the post archived, indicating the publication timestampn
+ 
+
+
+
+[MQTT Node] -> [Trello Node to create task] -> [Email Node to send confirmation]ompt and clear history
+
+qwen2.5-max
+
+What are the most popular use cases of mcp with n8n ? Explain why and examplify the process
+
+Introduction to MCP with n8n
+
+MCP (Message Passing Communication) is a protocol or framework that allows different systems, services, or devices to communicate by passing messages between them. It is widely used in distributed systems and IoT (Internet of Things) applications. n8n, on the other hand, is an open-source workflow automation tool that allows users to connect different apps and services using a visual interface. It enables users to create workflows by chaining together "nodes" that represent actions, such as sending data to an API, processing it, or triggering events.
+
+When combined, MCP and n8n can be used to automate complex workflows involving message-based communication. Below are some of the most popular use cases for MCP with n8n, along with explanations and examples.
+
+1. IoT Device Integration
+
+Why?
+IoT devices often rely on message-passing protocols like MQTT (a common implementation of MCP) to send and receive data. n8n can act as a bridge between these devices and other services, enabling real-time data processing, storage, or triggering actions based on sensor data.
+
+Example Process:
+
+An IoT device (e.g., a temperature sensor) sends temperature readings via MQTT to an MQTT broker.
+
+n8n listens to the MQTT topic using its MQTT node.
+
+If the temperature exceeds a threshold, n8n triggers an action:
+
+Sends an email alert using the Email node.
+
+Updates a dashboard in a cloud service (e.g., Google Sheets or Airtable).
+
+Activates another IoT device (e.g., turning on an air conditioner via an API call).
+
+Workflow Example:
+
+[MQTT Node] -> [IF Node to check temperature] -> [Email Node to send alert] 
+
+2. Real-Time Notifications
+
+Why?
+Many applications require real-time notifications when specific events occur. MCP protocols like WebSocket or MQTT can deliver these events instantly, while n8n can process and route them to appropriate notification channels (e.g., Slack, SMS, or Push Notifications).
+
+Example Process:
+
+A server publishes a message to an MQTT topic whenever a new order is placed.
+
+n8n subscribes to this topic using the MQTT node.
+
+Upon receiving the message, n8n:
+
+Parses the order details.
+
+Sends a notification to a Slack channel using the Slack node.
+
+Logs the order into a database using the Database node.
+
+Workflow Example:
+
+[MQTT Node] -> [Function Node to parse data] -> [Slack Node to send notification] 
+
+3. Data Aggregation and Transformation
+
+
+Create  a program  using a MCP to trigger actions based on the  creation of a Notion page.  n8n can listen for these events and execute predefined workflows :
+
+n8n listens to the creation of the post and processes the data in the predefined format (text or pdf) based on the post status in the Notion database
+
+Based on the data, n8n  creates a new task in a project management tool (Google sheet) , and set the post status to publication ready
+
+ The new posts are published daily at 12 p.m in the determined Slack channel  and a confirmation email is sent to the user.
+
+ the Notion database is updated, the post status is now published,  and the Google Sheet has the copy of the post archived, indicating the publication timestampn
+ 
+
+
+
+[MQTT Node] -> [Trello Node to create task] -> [Email Node to send confirmation]
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")  # Replace with your Notion integration token
+notion = Client(auth=NOTION_TOKEN)
+
+def fetch_page_content(page_id):
+    """
+    Fetches the content of a Notion page using its ID.
+    """
+    try:
+        response = notion.blocks.children.list(block_id=page_id)
+        return response.get("results", [])
+    except Exception as e:
+        print(f"Error fetching page content: {e}")
+        return []
+
+def format_indentation(block):
+    """
+    Formats the indentation of a Notion block.
+    Currently supports 'paragraph' and 'heading' blocks.
+    """
+    if block["type"] in ["paragraph", "heading_1", "heading_2", "heading_3"]:
+        text_blocks = block[block["type"]].get("rich_text", [])
+        for text in text_blocks:
+            # Adjust indentation by adding spaces (customize as needed)
+            if "text" in text:
+                current_content = text["text"]["content"]
+                text["text"]["content"] = "    " + current_content  # Add 4 spaces for indentation
+    return block
+
+def update_block(block_id, updated_block):
+    """
+    Updates a Notion block with the formatted content.
+    """
+    try:
+        notion.blocks.update(block_id=block_id, **updated_block)
+    except Exception as e:
+        print(f"Error updating block {block_id}: {e}")
+
+def format_notion_post(page_id):
+    """
+    Fetches, formats, and updates the indentation of all blocks in a Notion page.
+    """
+    print(f"Processing page with ID: {page_id}")
+    blocks = fetch_page_content(page_id)
+    
+    for block in blocks:
+        block_id = block["id"]
+        updated_block = format_indentation(block)
+        update_block(block_id, updated_block)
+    
+    print("Indentation formatting completed.")
+
+if __name__ == "__main__":
+    # Replace with the ID of the Notion page you want to format
+    PAGE_ID = "your-page-id-here"
+    format_notion_post(PAGE_ID)_"== 
