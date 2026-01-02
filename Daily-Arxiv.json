@@ -1,0 +1,249 @@
+{
+  "workflow_name": "Daily arXiv → LlamaCloud Indexing → Report Generation",
+  "version": "1.0.0",
+  "description": "Automates daily ingestion of arXiv papers, metadata enrichment, indexing to LlamaCloud, and report generation driven by a user-provided outline.",
+  "schedule": {
+    "type": "recurring",
+    "frequency": "daily",
+    "timezone": "Europe/Paris",
+    "time": "07:00"
+  },
+  "inputs": {
+    "arxiv": {
+      "query": "cat:cs.AI OR cat:cs.CL OR cat:stat.ML",
+      "max_results_per_run": 200,
+      "sort_by": "submittedDate",
+      "sort_order": "descending",
+      "lookback_window": "24h"
+    },
+    "llamacloud": {
+      "index_name": "arxiv_daily",
+      "namespace": "research",
+      "upsert_mode": "merge"
+    },
+    "report": {
+      "outline_source": "user",
+      "default_outline": [
+        "Executive summary",
+        "Key themes and trends",
+        "Notable papers (with brief commentary)",
+        "Methodological patterns",
+        "Open questions and future directions",
+        "Appendix: paper list"
+      ],
+      "output_format": "markdown"
+    }
+  },
+  "steps": [
+    {
+      "id": "step_1_pull_arxiv",
+      "name": "Pull daily papers from arXiv",
+      "type": "connector.arxiv.search",
+      "run": {
+        "endpoint": "http://export.arxiv.org/api/query",
+        "params_from_inputs": [
+          "arxiv.query",
+          "arxiv.max_results_per_run",
+          "arxiv.sort_by",
+          "arxiv.sort_order"
+        ],
+        "filter": {
+          "submitted_within": "inputs.arxiv.lookback_window"
+        }
+      },
+      "outputs": {
+        "papers_raw": "memory.papers_raw"
+      }
+    },
+    {
+      "id": "step_2_enrich_metadata",
+      "name": "Generate and normalize metadata",
+      "type": "transform.enrich_metadata",
+      "depends_on": ["step_1_pull_arxiv"],
+      "run": {
+        "input": "memory.papers_raw",
+        "fields": [
+          "paper_id",
+          "title",
+          "abstract",
+          "primary_category",
+          "categories",
+          "publication_date",
+          "update_date",
+          "authors",
+          "author_affiliations",
+          "research_lab",
+          "institutions",
+          "links",
+          "doi",
+          "pdf_url",
+          "version",
+          "keywords",
+          "language",
+          "source"
+        ],
+        "heuristics": {
+          "infer_affiliations_from_author_blocks": true,
+          "infer_research_lab_from_affiliations": true,
+          "keyword_extraction": {
+            "enabled": true,
+            "method": "tfidf+ngrams",
+            "top_k": 12
+          }
+        },
+        "normalization": {
+          "dates": "iso8601",
+          "authors": "deduplicate",
+          "institutions": "canonicalize"
+        }
+      },
+      "outputs": {
+        "papers_enriched": "memory.papers_enriched"
+      }
+    },
+    {
+      "id": "step_3_index_llamacloud",
+      "name": "Index enriched records in LlamaCloud",
+      "type": "connector.llamacloud.index",
+      "depends_on": ["step_2_enrich_metadata"],
+      "run": {
+        "index_name_from_inputs": "llamacloud.index_name",
+        "namespace_from_inputs": "llamacloud.namespace",
+        "upsert_mode_from_inputs": "llamacloud.upsert_mode",
+        "documents": "memory.papers_enriched",
+        "id_field": "paper_id",
+        "text_fields": ["title", "abstract"],
+        "metadata_fields": [
+          "publication_date",
+          "update_date",
+          "authors",
+          "author_affiliations",
+          "research_lab",
+          "institutions",
+          "primary_category",
+          "categories",
+          "keywords",
+          "links",
+          "doi",
+          "pdf_url",
+          "version",
+          "source"
+        ]
+      },
+      "outputs": {
+        "index_result": "memory.index_result"
+      }
+    },
+    {
+      "id": "step_4_daily_repeat",
+      "name": "Daily repetition controller",
+      "type": "control.recurring_run",
+      "depends_on": ["step_3_index_llamacloud"],
+      "run": {
+        "schedule_from_workflow": true,
+        "idempotency": {
+          "enabled": true,
+          "key": "workflow_run_date"
+        }
+      },
+      "outputs": {
+        "run_status": "memory.run_status"
+      }
+    },
+    {
+      "id": "step_5_get_outline",
+      "name": "Create report outline (prefer user-provided)",
+      "type": "human_in_the_loop.get_outline",
+      "run": {
+        "mode": "prefer_user",
+        "fallback_to_default_outline_from_inputs": true,
+        "prompt": "Please provide the report outline. If you skip, a default outline will be used."
+      },
+      "outputs": {
+        "report_outline": "memory.report_outline"
+      }
+    },
+    {
+      "id": "step_6_build_report_agent",
+      "name": "Develop report-generating agent",
+      "type": "agent.builder",
+      "depends_on": ["step_5_get_outline"],
+      "run": {
+        "agent_name": "ResearchReportAgent",
+        "capabilities": [
+          "retrieve_indexed_papers",
+          "cluster_by_theme",
+          "rank_notable_papers",
+          "summarize_with_citations",
+          "write_to_outline"
+        ],
+        "retrieval": {
+          "provider": "llamacloud",
+          "index_name_from_inputs": "llamacloud.index_name",
+          "namespace_from_inputs": "llamacloud.namespace",
+          "top_k": 50
+        },
+        "quality_controls": {
+          "deduplicate_similar_papers": true,
+          "avoid_hallucinated_affiliations": true,
+          "citation_required_for_claims": true
+        }
+      },
+      "outputs": {
+        "report_agent": "memory.report_agent"
+      }
+    },
+    {
+      "id": "step_7_generate_report",
+      "name": "Generate report from outline",
+      "type": "agent.run",
+      "depends_on": ["step_6_build_report_agent"],
+      "run": {
+        "agent_ref": "memory.report_agent",
+        "outline_ref": "memory.report_outline",
+        "time_window": "last_24h",
+        "output": {
+          "format_from_inputs": "report.output_format",
+          "include_appendix": true,
+          "include_metrics": true,
+          "metrics": [
+            "papers_ingested",
+            "top_categories",
+            "top_institutions",
+            "top_keywords"
+          ]
+        }
+      },
+      "outputs": {
+        "report": "memory.report"
+      }
+    }
+  ],
+  "error_handling": {
+    "retries": {
+      "max_attempts": 3,
+      "backoff": "exponential",
+      "retry_on": ["timeout", "rate_limit", "temporary_network_error"]
+    },
+    "on_failure": {
+      "action": "notify",
+      "channels": ["email", "slack"],
+      "include_last_successful_step": true
+    }
+  },
+  "observability": {
+    "logging": {
+      "level": "info",
+      "redact_fields": ["api_keys", "tokens"]
+    },
+    "metrics": {
+      "enabled": true,
+      "track": [
+        "run_duration_seconds",
+        "papers_fetched_count",
+        "papers_indexed_count",
+        "report_generation_seconds"
+      ]
+    }
+  }
+}
