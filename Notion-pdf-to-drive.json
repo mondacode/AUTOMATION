@@ -1,0 +1,323 @@
+import os
+import re
+import json
+import requests
+from datetime import datetime, timedelta
+from fpdf import FPDF
+from rake_nltk import Rake
+
+# Configuration via environment variables
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", ".")
+KEYWORDS_COUNT = int(os.getenv("KEYWORDS_COUNT", "10"))
+# Optional webhook for n8n (not actively used in this script by default)
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
+
+# Validate required config
+if not NOTION_TOKEN or not DATABASE_ID:
+    raise EnvironmentError("Missing NOTION_TOKEN or NOTION_DATABASE_ID environment variables.")
+
+# Ensure output directory exists
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Notion API base URL and headers
+NOTION_API_BASE = "https://api.notion.com/v1"
+NOTION_VERSION = "2022-06-28"  # Notion API version date
+HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": NOTION_VERSION,
+    "Content-Type": "application/json"
+}
+
+def fetch_new_posts():
+    """
+    Query the Notion database for pages created in the last 24 hours.
+    Returns a list of page objects (dictionaries) or an empty list if none.
+    """
+    # Calculate timestamp for 24 hours ago in ISO 8601 format (Z for UTC)
+    cutoff_time = (datetime.utcnow() - timedelta(hours=24)).replace(microsecond=0).isoformat() + "Z"
+    filter_payload = {
+        "filter": {
+            "timestamp": "created_time",
+            "created_time": {
+                "after": cutoff_time
+            }
+        }
+    }
+    url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
+    try:
+        response = requests.post(url, headers=HEADERS, json=filter_payload)
+    except requests.RequestException as e:
+        print(f"Error querying Notion database: {e}")
+        return []
+    if response.status_code != 200:
+        # Log error message from Notion if available
+        try:
+            error_info = response.json()
+        except ValueError:
+            error_info = response.text
+        print(f"Failed to fetch posts. Status {response.status_code}: {error_info}")
+        return []
+    data = response.json()
+    pages = data.get("results", [])
+    if not pages:
+        print("No new posts found in the last 24 hours.")
+    else:
+        print(f"Found {len(pages)} new posts.")
+    return pages
+
+def retrieve_page_content(page_id):
+    """
+    Retrieve all block children (content) for a given Notion page.
+    Returns the full plain-text content as a string.
+    """
+    blocks_text = []
+    url = f"{NOTION_API_BASE}/blocks/{page_id}/children"
+    while url:
+        try:
+            res = requests.get(url, headers=HEADERS)
+        except requests.RequestException as e:
+            print(f"Error fetching content for page {page_id}: {e}")
+            break
+        if res.status_code != 200:
+            # If an error occurred, break out
+            try:
+                err = res.json()
+            except ValueError:
+                err = res.text
+            print(f"Failed to retrieve page content (status {res.status_code}): {err}")
+            break
+        data = res.json()
+        for block in data.get("results", []):
+            btype = block.get("type")
+            if not btype:
+                continue
+            # Only process textual block types
+            if btype in ("paragraph", "heading_1", "heading_2", "heading_3",
+                         "bulleted_list_item", "numbered_list_item", "to_do",
+                         "quote", "callout", "toggle", "code"):
+                # Each of these has a 'rich_text' list containing text segments
+                text_list = block[btype].get("rich_text", [])
+                # Concatenate plain text from all segments
+                block_text = "".join([seg.get("plain_text", "") for seg in text_list])
+                if btype.startswith("heading_"):
+                    # Add an empty line before headings and uppercase the heading text for emphasis
+                    blocks_text.append("\n" + block_text.upper() + "\n")
+                elif btype == "bulleted_list_item":
+                    blocks_text.append(f"- {block_text}")
+                elif btype == "numbered_list_item":
+                    # For numbered lists, we could track numbers, but just use a bullet with number placeholder
+                    blocks_text.append(f"1. {block_text}")
+                elif btype == "to_do":
+                    # Indicate to-do checkbox (checked/unchecked)
+                    checked = block[btype].get("checked", False)
+                    checkbox = "[x]" if checked else "[ ]"
+                    blocks_text.append(f"{checkbox} {block_text}")
+                elif btype == "quote":
+                    # Quote blocks - prefix with quotation mark or indent
+                    blocks_text.append(f"\"{block_text}\"")
+                elif btype == "code":
+                    # Code block - include the code text with formatting markers
+                    language = block[btype].get("language", "")
+                    blocks_text.append(f"\n```{language}\n{block_text}\n```\n")
+                else:
+                    # paragraph, callout, toggle, etc. - just append the text
+                    blocks_text.append(block_text)
+            # (Optional) Handle image or other blocks if needed (e.g., include caption)
+            # For simplicity, non-text blocks are ignored in content output.
+        # Check for pagination
+        url = data.get("next_cursor")
+        if url:
+            url = f"{NOTION_API_BASE}/blocks/{page_id}/children?start_cursor={url}"
+    # Join all collected block texts with newline separators for final content
+    content_text = "\n".join(blocks_text)
+    return content_text.strip()
+
+def extract_keywords(text, top_n=KEYWORDS_COUNT):
+    """
+    Extract up to top_n keyword phrases from the given text using RAKE.
+    Returns a list of keyword strings.
+    """
+    if not text:
+        return []
+    rake = Rake()  # Uses default English stopwords and punctuation
+    rake.extract_keywords_from_text(text)
+    key_phrases = rake.get_ranked_phrases()
+    if not key_phrases:
+        return []
+    # Return the top N phrases
+    return key_phrases[:top_n]
+
+def slugify(title):
+    """
+    Generate a filesystem-friendly slug from the title.
+    """
+    slug = re.sub(r'[^0-9a-zA-Z]+', '-', title.strip()).strip('-')
+    return slug.lower()
+
+def generate_pdf(title, content, metadata, output_path):
+    """
+    Generate a PDF file with the given title and content, embedding metadata.
+    Metadata is a dict that may contain subject, author, keywords, etc.
+    Saves the PDF to output_path.
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    # Set PDF metadata
+    pdf.set_title(title)
+    subject = metadata.get("subject")
+    if subject:
+        pdf.set_subject(subject)
+    author = metadata.get("publication_medium") or metadata.get("author")
+    if author:
+        pdf.set_author(author)
+    keywords = metadata.get("keywords")
+    if keywords:
+        # Keywords should be a string of comma-separated or space-separated terms
+        if isinstance(keywords, list):
+            keywords_str = ", ".join(keywords)
+        else:
+            keywords_str = str(keywords)
+        pdf.set_keywords(keywords_str)
+    # Write the content (simple text output)
+    # Split by lines to ensure we preserve existing line breaks
+    for line in content.splitlines():
+        # Use a slightly smaller font for code blocks for better fit
+        if line.startswith("```"):
+            # If a line is a code fence marker, skip writing it (or handle as needed)
+            # Here we simply skip the ``` lines themselves for cleaner PDF.
+            continue
+        if line and line == line.lstrip():  # no indent
+            pdf.set_font("Helvetica", size=12)
+        else:
+            # Indented lines (could be code content) we use monospace font
+            pdf.set_font("Courier", size=11)
+        pdf.multi_cell(0, 10, line)
+    try:
+        pdf.output(output_path)
+    except Exception as e:
+        print(f"Error saving PDF to {output_path}: {e}")
+
+def save_metadata_json(post_metadata, output_path):
+    """
+    Save the post metadata dictionary as a JSON file to output_path.
+    """
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(post_metadata, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Error saving JSON metadata to {output_path}: {e}")
+
+def main():
+    pages = fetch_new_posts()
+    for page in pages:
+        page_id = page.get("id")
+        # Notion page title is typically in the "Name" or title property of the page
+        title_prop = None
+        # Find the title property (Notion databases have one 'title' type property)
+        for prop_val in page.get("properties", {}).values():
+            if prop_val.get("type") == "title":
+                title_items = prop_val.get("title", [])
+                if title_items:
+                    title_prop = title_items[0].get("plain_text")
+                break
+        title = title_prop or "Untitled"
+        created_time = page.get("created_time")
+        # Extract other metadata properties
+        properties = page.get("properties", {})
+        subject_val = ""
+        if "Subject" in properties:
+            subj = properties["Subject"]
+            if subj.get("type") == "multi_select":
+                subject_val = ", ".join([opt.get("name") for opt in subj.get("multi_select", [])])
+            elif subj.get("type") == "select":
+                subject_obj = subj.get("select")
+                subject_val = subject_obj.get("name") if subject_obj else ""
+            elif subj.get("type") == "title":  # sometimes subject might be part of title or text
+                title_items = subj.get("title", [])
+                subject_val = "".join([t.get("plain_text", "") for t in title_items])
+        difficulty_val = ""
+        if "Difficulty" in properties:
+            diff = properties["Difficulty"]
+            if diff.get("type") == "select":
+                diff_obj = diff.get("select")
+                difficulty_val = diff_obj.get("name") if diff_obj else ""
+        status_val = ""
+        if "Status" in properties:
+            stat = properties["Status"]
+            # Status property could be a "status" type or select
+            if stat.get("type") == "status":
+                stat_obj = stat.get("status")
+            else:
+                stat_obj = stat.get("select")
+            status_val = stat_obj.get("name") if stat_obj else ""
+        medium_val = ""
+        if "Publication Medium" in properties:
+            med = properties["Publication Medium"]
+            if med.get("type") == "select":
+                med_obj = med.get("select")
+                medium_val = med_obj.get("name") if med_obj else ""
+            elif med.get("type") == "rich_text":
+                rich = med.get("rich_text", [])
+                medium_val = "".join([t.get("plain_text", "") for t in rich])
+        url_val = ""
+        if "URL" in properties:
+            url_prop = properties["URL"]
+            if url_prop.get("type") == "url":
+                url_val = url_prop.get("url") or ""
+            elif url_prop.get("type") == "rich_text":
+                rich = url_prop.get("rich_text", [])
+                url_val = "".join([t.get("plain_text", "") for t in rich])
+            elif url_prop.get("type") == "formula":
+                formula = url_prop.get("formula", {})
+                if formula.get("type") == "string":
+                    url_val = formula.get("string", "")
+        # Retrieve page content text
+        content_text = retrieve_page_content(page_id)
+        # Extract keywords for SEO
+        keywords_list = extract_keywords(content_text, top_n=KEYWORDS_COUNT)
+        # Prepare metadata dict for JSON and PDF metadata
+        meta = {
+            "id": page_id,
+            "title": title,
+            "created_time": created_time,
+            "subject": subject_val,
+            "difficulty": difficulty_val,
+            "status": status_val,
+            "publication_medium": medium_val,
+            "url": url_val,
+            "keywords": keywords_list
+        }
+        # Generate file paths
+        slug = slugify(title)
+        # Use part of the page_id for uniqueness
+        id_suffix = page_id.replace("-", "")[:6]  # first 6 hex chars of UUID
+        filename_base = f"{slug}-{id_suffix}" if id_suffix else slug
+        pdf_path = os.path.join(OUTPUT_DIR, f"{filename_base}.pdf")
+        json_path = os.path.join(OUTPUT_DIR, f"{filename_base}.json")
+        # Generate PDF and JSON for the post
+        print(f"Exporting '{title}' to {pdf_path}...")
+        generate_pdf(title, content_text, {"subject": subject_val, 
+                                          "publication_medium": medium_val, 
+                                          "keywords": keywords_list}, pdf_path)
+        save_metadata_json(meta, json_path)
+        # (Optional) If a webhook URL is configured, send the data to n8n
+        if N8N_WEBHOOK_URL:
+            try:
+                with open(pdf_path, "rb") as pdf_file:
+                    files = {"file": (f"{filename_base}.pdf", pdf_file, "application/pdf")}
+                    # Send JSON data (except content for brevity) and PDF file
+                    payload = meta.copy()
+                    payload["pdf_file"] = f"{filename_base}.pdf"
+                    # Optionally, could include content or excerpt if needed
+                    r = requests.post(N8N_WEBHOOK_URL, data={"payload": json.dumps(payload)}, files=files)
+                    if r.status_code != 200:
+                        print(f"Webhook POST failed with status {r.status_code}: {r.text}")
+            except Exception as e:
+                print(f"Failed to send data to n8n webhook: {e}")
+
+if __name__ == "__main__":
+    main()
