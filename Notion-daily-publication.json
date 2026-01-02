@@ -1,0 +1,244 @@
+    
+{
+  "name": "Daily Notion Post Publication Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "filter": {
+          "property": "Status",
+          "select": {
+            "equals": "Validated"
+          }
+        }
+      },
+      "name": "Fetch Validated Notion Posts",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "notionApi": "Notion API Credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nreturn items.map(item => {\n  const title = item.json.properties.Title.title[0]?.plain_text || 'Untitled';\n  const content = item.json.properties.Content.rich_text.map(rt => rt.plain_text).join('');\n  return {\n    json: {\n      id: item.json.id,\n      title,\n      content\n    }\n  };\n});"
+      },
+      "name": "Extract Post Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "pdf",
+        "htmlContent": "<h1>{{ $json.title }}</h1><p>{{ $json.content }}</p>"
+      },
+      "name": "Convert Post to PDF",
+      "type": "n8n-nodes-base.htmlToPdf",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "folderId": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+        "fileName": "{{ $json.title }}.pdf"
+      },
+      "name": "Upload PDF to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": "Google Drive OAuth2 API Credentials"
+      }
+    },
+    {
+      "parameters": {
+        "channel": "YOUR_SLACK_CHANNEL",
+        "text": "A new post has been published: {{ $json.title }}",
+        "attachments": [
+          {
+            "filename": "{{ $json.title }}.pdf",
+            "binaryData": true,
+            "binaryProperty": "pdf"
+          }
+        ]
+      },
+      "name": "Send PDF to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "slackApi": "Slack API Credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nreturn items.map(item => {\n  const now = new Date().toISOString();\n  return {\n    json: {\n      ...item.json,\n      status: 'Published',\n      publicationDate: now,\n      fileUrl: item.binary.pdf.url\n    }\n  };\n});"
+      },
+      "name": "Update Post Status and Prepare Archive Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "sheetId": "YOUR_GOOGLE_SHEET_ID",
+        "range": "A1:F1",
+        "options": {
+          "headerRow": true
+        },
+        "columns": [
+          {
+            "name": "Title",
+            "value": "={{ $json.title }}"
+          },
+          {
+            "name": "Content",
+            "value": "={{ $json.content }}"
+          },
+          {
+            "name": "Update Date",
+            "value": "={{ $json.publicationDate }}"
+          },
+          {
+            "name": "Status",
+            "value": "={{ $json.status }}"
+          },
+          {
+            "name": "Publication Date",
+            "value": "={{ $json.publicationDate }}"
+          },
+          {
+            "name": "File URL",
+            "value": "={{ $json.fileUrl }}"
+          }
+        ]
+      },
+      "name": "Archive Post Details in Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [1780, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": "Google Sheets OAuth2 API Credentials"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "pageId": "={{ $json.id }}",
+        "properties": {
+          "Status": {
+            "select": {
+              "name": "Published"
+            }
+          }
+        }
+      },
+      "name": "Update Notion Post Status to Published",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 1,
+      "position": [2000, 300],
+      "credentials": {
+        "notionApi": "Notion API Credentials"
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Fetch Validated Notion Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Validated Notion Posts": {
+      "main": [
+        [
+          {
+            "node": "Extract Post Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ] BG
+    },
+    "Extract Post Data": {
+      "main": [
+        [
+          {
+            "node": "Convert Post to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Post to PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Send PDF to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send PDF to Slack": {
+      "main": [
+        [
+          {
+            "node": "Update Post Status and Prepare Archive Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Post Status and Prepare Archive Data": {
+      "main": [
+        [
+          {
+            "node": "Archive Post Details in Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Post Details in Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Update Notion Post Status to Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
